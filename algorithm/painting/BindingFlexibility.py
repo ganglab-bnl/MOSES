@@ -1,7 +1,7 @@
 """
 Class to create new Lattice objects with different binding flexibilities.
 """
-from algorithm.lattice.Lattice import Lattice
+from algorithm.lattice.Lattice2 import Lattice
 from algorithm.lattice.Voxel import Voxel
 from algorithm.lattice.Bond import Bond
 

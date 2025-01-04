@@ -1,6 +1,5 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QGridLayout, QScrollArea
 import numpy as np
-from algorithm.lattice.Lattice import Lattice
 
 class FillDimensions(QWidget):
     def __init__(self, parent=None):

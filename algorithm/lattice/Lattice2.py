@@ -14,7 +14,7 @@ import pandas as pd
 
 from algorithm.lattice.Voxel import Voxel
 from algorithm.lattice.Bond import Bond
-from algorithm.symmetry.Relation import Relation
+# from algorithm.symmetry.Relation import Relation
 
 class Lattice:
     """
@@ -35,7 +35,7 @@ class Lattice:
         _init_voxels: Initializes all Voxel + blank Bond objects and their coordinates
                         in the Lattice.MinDesign
         _fill_partners: Fills all bond partners on all voxels in voxel_list in place
-        _get_partner: Internal method to get the bond partner of a voxel (for _fill_partners)
+        get_partner: Internal method to get the bond partner of a voxel (for _fill_partners)
     """
     
     def __init__(self, input_lattice: np.array):
@@ -136,27 +136,27 @@ class Lattice:
         return final_df
     
 
-    def unique_origami(self) -> list[int]:
-        """
-        Returns a list of unique origami (Voxel+Bonds) in the lattice.
-        """
-        if self.symmetry_df is None:
-            raise ValueError("SymmetryDf not computed yet. Run Lattice.compute_symmetries() first.")
+    # def unique_origami(self) -> list[int]:
+    #     """
+    #     Returns a list of unique origami (Voxel+Bonds) in the lattice.
+    #     """
+    #     if self.symmetry_df is None:
+    #         raise ValueError("SymmetryDf not computed yet. Run Lattice.compute_symmetries() first.")
         
-        voxels = iter(self.voxels.values())
-        unique_origami = [next(voxels).id]  # Initialize with the first voxel's ID in lattice
+    #     voxels = iter(self.voxels.values())
+    #     unique_origami = [next(voxels).id]  # Initialize with the first voxel's ID in lattice
 
-        for voxel1 in voxels:
-            if all(         # If for all voxel2's in unique_origami
-                not any(    # voxel1 and voxel2 don't satisfy "equal" relation
-                    Relation.get_voxel_relation(voxel1, self.get_voxel(voxel2_id), sym_label) == "equal"
-                    for sym_label in self.symmetry_df.symlist(voxel1.id, voxel2_id) or [] 
-                ) # ^^ for any given rotation under which they could be equal
-                for voxel2_id in unique_origami
-            ):
-                unique_origami.append(voxel1.id) # then voxel1 is unique
+    #     for voxel1 in voxels:
+    #         if all(         # If for all voxel2's in unique_origami
+    #             not any(    # voxel1 and voxel2 don't satisfy "equal" relation
+    #                 Relation.get_voxel_relation(voxel1, self.get_voxel(voxel2_id), sym_label) == "equal"
+    #                 for sym_label in self.symmetry_df.symlist(voxel1.id, voxel2_id) or [] 
+    #             ) # ^^ for any given rotation under which they could be equal
+    #             for voxel2_id in unique_origami
+    #         ):
+    #             unique_origami.append(voxel1.id) # then voxel1 is unique
 
-        return unique_origami
+    #     return unique_origami
 
 
     # --- Internal methods --- #
@@ -232,7 +232,7 @@ class Lattice:
                 if voxel_bond.bond_partner is not None:
                     continue
                 # Get the partner bond the voxel is connected to
-                partner_voxel, partner_bond = self._get_partner(voxel=voxel, 
+                partner_voxel, partner_bond = self.get_partner(voxel=voxel, 
                                                                 direction=direction)
                 # Set the partner_bond attributes on both voxels
                 voxel_bond.set_bond_partner(partner_bond)
@@ -240,7 +240,7 @@ class Lattice:
 
                 # print(f"Filled partner: Voxel {voxel.id} [{voxel.material}] ---{direction}---> Voxel {partner_voxel.id} [{partner_voxel.material}]")
     
-    def _get_partner(self, voxel, direction) -> tuple[Voxel, Bond]:
+    def get_partner(self, voxel, direction) -> tuple[Voxel, Bond]:
         """
         Get the bond partner of a voxel in a given direction.
         Note that directions are all stored as tuples but need to be converted

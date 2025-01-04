@@ -32,7 +32,7 @@ class Painter:
         self.n_colors = 0 
 
         # Rotater instance (used for map painting)
-        self.rotater = Rotater()
+        self.rotater = Rotater(lattice)
         self.verbose: bool = verbose # If true, prints debugging statements
 
     def paint_lattice(self):
@@ -119,12 +119,18 @@ class Painter:
                     if bond1.color is None and bond2.color is None:
                         self.n_colors += 1
 
+                        symlist = self.lattice.symmetry_df.symlist(voxel1, voxel2)
+                        if symlist==[] or symlist is None:
+                            bond_type = "structural"
+                        else:
+                            bond_type = "complementary"
+
                         # paint the bond
                         if self.verbose:
-                            print(f"\n--- PAINT C_BOND ({self.n_colors}) --- \nvoxel_{voxel1.id} ({bond1.direction}) <---> voxel_{voxel2.id} ({bond2.direction})\n")
-
-                        self.paint_bond(bond=bond1, color=self.n_colors, type="complementary")
-                        self.paint_bond(bond=bond2, color=-self.n_colors, type="complementary")
+                            print(f"\n--- PAINT {bond_type} BOND ({self.n_colors}) --- \nvoxel_{voxel1.id} ({bond1.direction}) <---> voxel_{voxel2.id} ({bond2.direction})\n")
+                    
+                        self.paint_bond(bond=bond1, color=self.n_colors, type=bond_type)
+                        self.paint_bond(bond=bond2, color=-self.n_colors, type=bond_type)
 
                     # paint self symmetries
                     self.self_sym_paint(voxel1)
@@ -154,11 +160,18 @@ class Painter:
                         # paint the bond
                         self.n_colors += 1
 
-                        if self.verbose:
-                            print(f"\n--- PAINT C_BOND ({self.n_colors}) --- \nvoxel_{voxel1.id} ({bond1.direction}) <---> voxel_{voxel2.id} ({bond2.direction})\n")
+                        symlist = self.lattice.symmetry_df.symlist(voxel1, voxel2)
+                        if symlist==[] or symlist is None:
+                            bond_type = "structural"
+                        else:
+                            bond_type = "complementary"
 
-                        self.paint_bond(bond=bond1, color=self.n_colors, type="complementary")
-                        self.paint_bond(bond=bond2, color=-self.n_colors, type="complementary")
+                        # paint the bond
+                        if self.verbose:
+                            print(f"\n--- PAINT {bond_type} BOND ({self.n_colors}) --- \nvoxel_{voxel1.id} ({bond1.direction}) <---> voxel_{voxel2.id} ({bond2.direction})\n")
+                    
+                        self.paint_bond(bond=bond1, color=self.n_colors, type=bond_type)
+                        self.paint_bond(bond=bond2, color=-self.n_colors, type=bond_type)
 
                     # add the voxel to the complementary set
                     voxel2.set_type("complementary")
@@ -194,11 +207,18 @@ class Painter:
                         # paint the bond
                         self.n_colors += 1
 
-                        if self.verbose:
-                            print(f"\n--- PAINT C_BOND ({self.n_colors}) --- \nvoxel_{voxel1.id} ({bond1.direction}) <---> voxel_{voxel2.id} ({bond2.direction})\n")
+                        symlist = self.lattice.symmetry_df.symlist(voxel1, voxel2)
+                        if symlist==[] or symlist is None:
+                            bond_type = "structural"
+                        else:
+                            bond_type = "complementary"
 
-                        self.paint_bond(bond=bond1, color=self.n_colors, type="complementary")
-                        self.paint_bond(bond=bond2, color=-self.n_colors, type="complementary")
+                        # paint the bond
+                        if self.verbose:
+                            print(f"\n--- PAINT {bond_type} BOND ({self.n_colors}) --- \nvoxel_{voxel1.id} ({bond1.direction}) <---> voxel_{voxel2.id} ({bond2.direction})\n")
+                    
+                        self.paint_bond(bond=bond1, color=self.n_colors, type=bond_type)
+                        self.paint_bond(bond=bond2, color=-self.n_colors, type=bond_type)
                     
                     # paint self symmetries
                     self.self_sym_paint(voxel1)
@@ -222,6 +242,7 @@ class Painter:
         """
         print("Mapping the mesovoxel onto the rest of the lattice...\n---")
         for voxel1 in self.lattice.voxels.values():
+            
             # skip voxels that are in the mesovoxel
             if self.mesovoxel.contains_voxel(voxel1):
                 print(f"skipping {voxel1.id}, already in mesovoxel")
@@ -238,7 +259,7 @@ class Painter:
                 print(f"only str_mp {str_mp} exists, mapping onto voxel {voxel1.id}")
                 symlist = self.lattice.symmetry_df.symlist(str_mp, voxel1)
                 for sym in symlist:
-                    res = self.map_paint(parent=str_mp, child=voxel1, sym_label=sym, with_negation=False, force=True)
+                    res = self.map_paint(parent=str_mp, child=voxel1, sym_label=sym, with_negation=False, force=False)
                     if res:
                         break
                 voxel1.set_type("structural")
@@ -275,7 +296,7 @@ class Painter:
             
             print(f"both str_mp {str_mp} and comp_mp {comp_mp} exist, mapping {map_variant} onto voxel {voxel1.id}")
             sym = self.lattice.symmetry_df.symlist(map_variant, voxel1)[0]
-            res = self.map_paint(parent=map_variant, child=voxel1, sym_label=sym, force=True)
+            res = self.map_paint(parent=map_variant, child=voxel1, sym_label=sym, force=False)
             voxel1.set_type(mesotype1)
                 
 
@@ -309,6 +330,8 @@ class Painter:
         
         if self.verbose:
             print(f"    map_paint(parent_{parent.id} --> child_{child.id}, sym={sym_label}, with_negation={with_negation})")
+            print(f"        parent = {[f'{b.get_label()} ({b.color}),' for b in parent.bond_dict.dict.values()]}")
+            print(f"        child = {[f'{b.get_label()} ({b.color}),' for b in child.bond_dict.dict.values()]}")
 
         rotated_parent = self.rotater.rotate_voxel(voxel=parent, rot_label=sym_label) # rotated bond_dict object
 
@@ -322,9 +345,11 @@ class Painter:
 
             # no need to paint None colors)
             if parent_bond.color is None:
+                print(f"oops! parent bond {parent_bond.get_label()} is none")
                 continue
             # only paint onto already-painted bonds if force is true
             if child_bond.color is not None and not force:
+                print(f"oops! child bond {child_bond.get_label()} is not none, and we're not forcing")
                 continue
             
             # Bond color is negated (on c_bonds) if with_negation
@@ -340,11 +365,10 @@ class Painter:
                 return 0 # fail
                 
             self.paint_bond(child_bond, bond_color, type=parent_bond.type)
-            # Also paint the partner voxel (does the updated script need to do this?)
             bond_partner = child_bond.bond_partner
             self.paint_bond(bond_partner, -1*bond_color, type=parent_bond.type)
 
-            return 1 # success
+        return 1 # success
 
     def paint_bond(self, bond: Bond, color: int, type: str) -> None:
         """
@@ -355,7 +379,7 @@ class Painter:
             color (int): What color to paint it
             type (str): Either "complementary" or "structural" depending on type of bond to paint
         """
-        # if self.verbose:
-        #     print(f"\t ---> painting {color} onto voxel {bond.voxel.id}'s bond {bond.get_label()} with type {type} ")
+        if self.verbose:
+            print(f"\t ---> painting {color} onto voxel {bond.voxel.id}'s bond {bond.get_label()} with type {type} ")
         bond.set_color(color)
         bond.set_type(type)

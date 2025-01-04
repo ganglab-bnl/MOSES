@@ -8,8 +8,7 @@ import math
 from .Voxel import Voxel
 from .Bond import Bond
 from .ColorDict import ColorDict
-from algorithm.lattice.Lattice import Lattice
-from algorithm.painting.Painter import Painter
+from algorithm.lattice.Lattice2 import Lattice
 
 class Visualizer(QWidget):
     def __init__(self):
@@ -142,7 +141,7 @@ class Visualizer(QWidget):
 
         # Call other function to view voxels in mindesign
         #TODO: add separate unit cell viewing
-        self.view_voxels(voxels=lattice.voxels)
+        self.view_voxels(voxels=lattice.voxels.values())
 
     
     def cleanup_gl_resources(self):

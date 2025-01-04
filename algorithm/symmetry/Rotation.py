@@ -174,8 +174,9 @@ class ScipyRotationDict:
 
 
 class Rotater:
-    def __init__(self):
+    def __init__(self, lattice: 'Lattice'):
         self.scirot_dict = ScipyRotationDict()
+        self.lattice = lattice
 
     def rotate_voxel(self, voxel: Voxel, rot_label: str) -> BondDict:
         """
@@ -199,13 +200,16 @@ class Rotater:
             rotated_direction = rot(direction)
             rotated_direction = tuple(np.round(rotated_direction).astype(int)) # format it as a tuple
 
+            # get bond partner in the rotated direction (may be different)
+            _, rot_bond_partner = self.lattice.get_partner(voxel, rotated_direction)
+
             # Store the color in the bond_dict with the rotated direction as the key
             rotated_bond = Bond(
                 direction=rotated_direction,
                 voxel=voxel,
                 color=bond.color,
                 type=bond.type,
-                bond_partner=bond.bond_partner
+                bond_partner=rot_bond_partner
             )
             bond_dict.dict[rotated_direction] = rotated_bond
         
