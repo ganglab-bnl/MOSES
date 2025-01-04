@@ -83,6 +83,21 @@ class Voxel:
             partner_voxel_id = bond.bond_partner.voxel.id
             partner_voxels.append(partner_voxel_id)
         return partner_voxels
+
+    def get_type(self) -> bool:
+        """
+        Return the type "structural" or "complementary" of the voxel
+        Returns None if not set
+        """
+        return self.type if self.type else None
+    
+    def is_fully_colored(self) -> bool:
+        """Return whether all bonds on the voxel have a color"""
+        count = 0
+        for direction, bond in self.bond_dict.dict.items():
+            if bond.color is not None or bond.color != 0:
+                count += 1
+        return True if count==6 else False
     
     def load_bonds(self, bond_dict: BondDict) -> None:
         """

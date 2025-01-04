@@ -2,9 +2,9 @@ import numpy as np
 import pandas as pd
 import logging
 
-from algorithm.lattice.Lattice import Lattice
+from algorithm.lattice.Lattice2 import Lattice
 from algorithm.lattice.Voxel import Voxel
-from algorithm.symmetry.Rotation import NpRotationDict
+from algorithm.symmetry.Rotation import NpRotationDict, ScipyRotationDict
 
 
 class SymmetryDf:
@@ -35,16 +35,17 @@ class SymmetryDf:
         """
         # Store references to lattice and Surroundings objects for use in symmetry comparisons
         self.lattice = lattice
-        self.surroundings = lattice.Surroundings
+        self.surroundings = lattice.surroundings
 
         # Create dictionary of all possible symmetry operations
         # Ex: {'90° X-axis': lambda x: np.rot90(x, 1, (0, 1)), ...}
-        self.symmetry_operations = NpRotationDict().all_rotations
+        # self.symmetry_operations = NpRotationDict().all_rotations
+        self.symmetry_operations = ScipyRotationDict().all_rotations
         
         # The SymmetryDf data structure containing all voxel pairs and their symmetries
         # Ex: (0, 1): {'90° X-axis': True, '180° Y-axis': False, ...}
         self.symmetry_df = self._init_symmetry_df()
-        self._compute_all_symmetries() # Fill all symmetries in place
+        self._compute_all_symmetries2() # Fill all symmetries in place
     
 
     def symlist(self, voxel1, voxel2) -> list[str]:
@@ -58,8 +59,8 @@ class SymmetryDf:
             - symlist: List of symmetry labels that are valid for the voxel pair
                 -> ex: ['90° X-axis', '180° Y-axis']
         """
-        voxel1_id = voxel1.id if isinstance(voxel1, Voxel) else voxel1
-        voxel2_id = voxel2.id if isinstance(voxel2, Voxel) else voxel2
+        voxel1_id = voxel1 if isinstance(voxel1, int) else voxel1.id
+        voxel2_id = voxel2 if isinstance(voxel2, int) else voxel2.id
         voxel_pair_label = VoxelPair.make_label(frozenset([voxel1_id, voxel2_id]))
 
         # Get those symmetries which are True for the voxel pair
@@ -86,7 +87,7 @@ class SymmetryDf:
         """
         voxel_id = voxel.id if isinstance(voxel, Voxel) else voxel
         symdict = {}
-        for voxel2 in self.lattice.voxels:
+        for voxel2 in self.lattice.voxels.values():
             current_symlist = self.symlist(voxel_id, voxel2.id)
             # only add symlists for voxel pairs with valid symmetries
             if len(current_symlist) > 0:
@@ -117,8 +118,8 @@ class SymmetryDf:
         """
         # Create a list of all possible voxel pairs
         voxel_pairs_set = set()
-        for voxel1 in self.lattice.voxels:
-            for voxel2 in self.lattice.voxels:
+        for voxel1 in self.lattice.voxels.values():
+            for voxel2 in self.lattice.voxels.values():
                 voxel_pairs_set.add(frozenset([voxel1.id, voxel2.id]))
         
         # Convert the set of frozensets to a list of formatted strings
@@ -164,13 +165,43 @@ class SymmetryDf:
 
                     self.symmetry_df.loc[voxel_pair_label, sym_label] = has_symmetry # Store the result in symmetry_df
 
+    def _compute_all_symmetries2(self):
+        for sym_label, sym_function in self.symmetry_operations.items():
+
+            # Loop through all possible voxel pairs
+            for voxel1 in self.lattice.voxels.values():
+
+                # Transform surroundings of voxel1 once per symmetry
+                surr1 = self.surroundings.voxel_surroundings(voxel1)
+                rot_surr1 = self.surroundings.rotate(surr1, sym_function)
+
+                for voxel2 in self.lattice.voxels.values():
+                    # Make voxel pair label (str) to index into SymmetryDf
+                    voxel_pair_label = VoxelPair.make_label(frozenset([voxel1.id, voxel2.id])) 
+
+                    # skip if symmetry has already been computed
+                    symmetry_already_computed = not pd.isna(self.symmetry_df.loc[voxel_pair_label, sym_label])
+                    if symmetry_already_computed:
+                        continue 
+
+                    # Check symmetry:
+                    # Two voxels are symmetric if their surroundings are the same after one is transformed
+                    surr2 = self.surroundings.voxel_surroundings(voxel2)
+                    
+                    if set(surr2.keys()) == set(rot_surr1.keys()):
+                        has_symmetry = all(surr2[key] == rot_surr1[key] for key in surr2.keys())
+                    else:
+                        has_symmetry = False
+
+                    self.symmetry_df.loc[voxel_pair_label, sym_label] = has_symmetry # Store the result in symmetry_df
+
     # info / print function
     def print_all_symdicts(self) -> None:
         """
         Auxiliary function to print all possible symdicts for all voxels in the Lattice.MinDesign
         (Not used in actual algorithm, only for testing)
         """
-        for voxel in self.lattice.voxels:
+        for voxel in self.lattice.voxels.values():
             print(f'Voxel {voxel.id}\n---\nCoordinates: {voxel.coordinates} Material: {voxel.material}')
             print('Symmetries:')
             for voxel_pair, symlist in self.symdict(voxel.id).items():

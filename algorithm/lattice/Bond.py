@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Dict, Tuple, Optional
 
-
 @dataclass
 class Bond:
     """

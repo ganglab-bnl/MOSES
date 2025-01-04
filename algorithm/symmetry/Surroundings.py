@@ -7,12 +7,12 @@ from algorithm.lattice.Lattice import Lattice
 class Surroundings:
     def __init__(self, lattice: Lattice):
         """
-        Manager class for creating, transforming, and comparing VoxelSurroundings
+        Manager class for creating, transforming, and comparing VoxelSurroundings 
         matrices for a given lattice design.
         """
         self.FullSurroundings = self._init_full_surroundings(lattice)
 
-    def voxel_surroundings(self, voxel: Voxel):
+    def voxel_surroundings(self, voxel: Voxel, verbose=False):
         """
         Get the VoxelSurroundings for a given voxel in the UnitCell, in which each value 
         represents the voxel.material for each voxel and its VoxelSurroundings.
@@ -39,6 +39,10 @@ class Surroundings:
 
         max_og_len = max(og_zlen, og_ylen, og_xlen)
         extend_amt = floor(max_og_len / 2)
+
+        if verbose:
+            print(f"Halfway points for each direction: ({z_0, y_0, x_0})")
+            print(f"Slicing full_surr @ ({vox_z, vox_y, vox_x})")
 
         VoxelSurroundings = self.FullSurroundings[(vox_z-extend_amt) : (vox_z+extend_amt+1),
                                                  (vox_y-extend_amt) : (vox_y+extend_amt+1),

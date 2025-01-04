@@ -1,5 +1,5 @@
 from algorithm.lattice.Voxel import Voxel
-from algorithm.lattice.Lattice import Lattice
+from algorithm.lattice.Lattice2 import Lattice
 from algorithm.symmetry.Relation import Relation
 
 from dataclasses import dataclass
@@ -136,12 +136,15 @@ class Mesovoxel:
         Returns:
             structural_voxels: A set of voxel ids (ints) of structural voxels in lattice
         """
+        # iterate over voxels
+        voxels = iter(self.lattice.voxels.values())
+
         # init with first voxel in lattice
-        v_0 = self.lattice.voxels[0]
+        v_0 = next(voxels)
         v_0.set_type("structural")
         structural_voxels = set([v_0.id]) 
         
-        for voxel in self.lattice.voxels[1:]:
+        for voxel in voxels:
             # check if voxel has symmetry with any current structural_voxels
             symvoxels = self.lattice.symmetry_df.get_symvoxels(voxel.id)
 
@@ -186,23 +189,18 @@ class Mesovoxel:
 
         return mesoparents
 
-    
-    def get_structural_voxels(self) -> list[MVoxel]:
-        """Returns list of all structural MVoxels"""
-        structural_voxels = []
-        for mv in self.mvoxels:
-            if mv.type == "structural":
-                structural_voxels.append(mv)
-        return structural_voxels
 
     def contains_voxel(self, voxel):
         """
         Check if the the given voxel (id/Voxel) is mapped to an MVoxel in the Mesovoxel
         """
         voxel_id = voxel.id if isinstance(voxel, Voxel) else voxel
-        return True if self.voxels.get(voxel_id) else False
+        return True if voxel_id in self.structural_voxels or voxel_id in self.complementary_voxels else False
     
 
-    def n_mvoxels(self):
-        """Return the number of MVoxels in the mesovoxel"""
-        return len(self.mvoxels)
+    def all_voxels(self) -> list[int]:
+        """
+        Returns the set of all voxels in the mesovoxel. Aka just the current
+        structural and complementary voxels.
+        """
+        return self.structural_voxels | self.complementary_voxels

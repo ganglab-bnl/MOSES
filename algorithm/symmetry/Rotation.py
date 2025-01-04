@@ -16,6 +16,7 @@ class NpRotationDict:
         self.translation = {
             'translation': lambda x: x # Identity function
         }
+
         # self.single_rotations = {
         #     '90° X-axis': lambda x: np.rot90(x, 1, (0, 2)),
         #     '180° X-axis': lambda x: np.rot90(x, 2, (0, 2)),
@@ -44,9 +45,9 @@ class NpRotationDict:
             '270° Y-axis': lambda x: np.rot90(x, 3, (0, 2)), 
 
             # Rotations around the Z-axis
-            '90° Z-axis': lambda x: np.rot90(x, 1, (2, 1)),
-            '180° Z-axis': lambda x: np.rot90(x, 2, (2, 1)),
-            '270° Z-axis': lambda x: np.rot90(x, 3, (2, 1))
+            '90° Z-axis': lambda x: np.rot90(x, 1, (1, 2)),
+            '180° Z-axis': lambda x: np.rot90(x, 2, (1, 2)),
+            '270° Z-axis': lambda x: np.rot90(x, 3, (1, 2))
         }
         self.double_rotations = self._init_double_rotations()
         self.all_rotations = {
