@@ -3,7 +3,7 @@ from PyQt6.QtCore import pyqtSignal
 import numpy as np
 from .SetDimensions import SetDimensions
 from .FillDimensions import FillDimensions
-from algorithm.lattice.Lattice2 import Lattice
+from algorithm.lattice.Lattice import Lattice
 
 class Designer(QWidget):
     latticeSaved = pyqtSignal(np.ndarray)

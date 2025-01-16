@@ -1,5 +1,5 @@
 from algorithm.lattice.Voxel import Voxel
-from algorithm.lattice.Lattice import Lattice
+from archive.Lattice import Lattice
 from algorithm.symmetry.Relation import Relation
 
 from dataclasses import dataclass

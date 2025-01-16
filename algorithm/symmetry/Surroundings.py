@@ -1,8 +1,6 @@
-from math import ceil, floor
 import numpy as np
 from algorithm.lattice.Voxel import Voxel
 from algorithm.lattice.Lattice import Lattice
-
 
 class Surroundings:
     def __init__(self, lattice: Lattice):
@@ -10,78 +8,63 @@ class Surroundings:
         Manager class for creating, transforming, and comparing VoxelSurroundings 
         matrices for a given lattice design.
         """
-        self.FullSurroundings = self._init_full_surroundings(lattice)
+        self.lattice = lattice
 
-    def voxel_surroundings(self, voxel: Voxel, verbose=False):
+    def voxel_surroundings(self, voxel) -> dict[tuple[float, float, float], int]:
         """
         Get the VoxelSurroundings for a given voxel in the UnitCell, in which each value 
         represents the voxel.material for each voxel and its VoxelSurroundings.
-        @param:
-            - voxel: The Voxel object to build VoxelSurroundings around
-        @return:
-            - VoxelSurroundings: 3D numpy array of tuples (voxel.material, voxel.index) 
+        
+        Args:
+            voxel: The Voxel object to build VoxelSurroundings around
+        Returns:
+            voxel_surroundings: 3D numpy array of tuples (voxel.material, voxel.index) 
         """
+        voxel = self.lattice.get_voxel(voxel) if isinstance(voxel, int) else voxel
 
-        # How far down to go in each direction
-        og_zlen, og_ylen, og_xlen = self.MinDesign_dimensions # original dimensions of MinDesign
-        z_repeats, y_repeats, x_repeats = self.tile_repeats # how many times MinDesign is repeated in xyz directions in FullSurroundings
+        z_len, y_len, x_len = self.lattice.MinDesign.shape
+        max_len = max(z_len, y_len, x_len)
 
-        # Get halfway points for each direction
-        # (x_0, y_0, z_0) corresponds to the (0,0,0) position of the middle MinDesign
-        z_0 = floor(z_repeats / 2) * og_zlen
-        y_0 = floor(y_repeats / 2) * og_ylen
-        x_0 = floor(x_repeats / 2) * og_xlen
+        # create a surroundings cube at least max_len out from the center
+        coord_range = np.linspace(-max_len, max_len, 2*max_len+1)
+        x, y, z = np.meshgrid(coord_range, coord_range, coord_range, indexing='ij')
+        coords = np.array([x.flatten(), y.flatten(), z.flatten()]).T
 
-        # Get voxel's new coordinates within middle MinDesign
-        vox_z = z_0 + voxel.np_index[0]
-        vox_y = y_0 + voxel.np_index[1]
-        vox_x = x_0 + voxel.np_index[2]
+        surr = {}
+        for coord in coords:
+            # convert voxel_surr coords into an index into the original lattice
+            x, y, z = coord + np.array(voxel.coordinates)
+            og_x = int((x_len + x) % x_len)
+            og_y = int((y_len + y) % y_len)
+            og_z = int((z_len + z) % z_len)
+            
+            og_voxel = self.lattice.voxels[(og_x, og_y, og_z)]
+            og_mat = og_voxel.material
 
-        max_og_len = max(og_zlen, og_ylen, og_xlen)
-        extend_amt = floor(max_og_len / 2)
+            surr[tuple(coord)] = og_mat
 
-        if verbose:
-            print(f"Halfway points for each direction: ({z_0, y_0, x_0})")
-            print(f"Slicing full_surr @ ({vox_z, vox_y, vox_x})")
+        return surr
+    
 
-        VoxelSurroundings = self.FullSurroundings[(vox_z-extend_amt) : (vox_z+extend_amt+1),
-                                                 (vox_y-extend_amt) : (vox_y+extend_amt+1),
-                                                 (vox_x-extend_amt) : (vox_x+extend_amt+1)]
-
-        return VoxelSurroundings
-
-    def _init_full_surroundings(self, lattice: Lattice):
+    def rotate(self, surr_dict: dict[tuple[float, float, float], int], rotation) -> dict[tuple[float, float, float], int]:
         """
-        Initialize a FullSurroundings from all voxels in Lattice.MinDesign,
-        which all other SurroundingsMatrices will be subset from.
-        @param:
-            - lattice: A Lattice object
-        @return:
-            - full_surroundings: 3D numpy array of ints
+        Accepts a surroundings dictionary (coords: mat) and rotates each coordinate 
+        based on the supplied rotation function.
+
+        Args:
+            surr_dict
+            rotation
+
+        Returns:
+            rot_surr
         """
-        max_len = max(np.shape(lattice.MinDesign))
-        final_len = 3 * max_len
+        # convert coords and materials to their own np.arrays
+        surr_keys = np.array(list(surr_dict.keys()))
+        surr_values = list(surr_dict.values())
 
-        # Get dimensions of MinDesign (we are tiling MinDesign)
-        z_len, y_len, x_len = lattice.MinDesign.shape
-        self.MinDesign_dimensions = [z_len, y_len, x_len]
+        # apply rotation
+        rot_surr_keys = rotation(surr_keys)
+        rot_surr_keys = np.round(rot_surr_keys).astype(int)
+        rot_surr = {tuple(key): value for key, value in zip(rot_surr_keys, surr_values)}
 
-        # I imagine z=layers, y=rows, x=columns
-        z_repeats = ceil(final_len / z_len)
-        y_repeats = ceil(final_len / y_len) 
-        x_repeats = ceil(final_len / x_len) 
-
-        # If x, y, or z repeats are even, add 1 to make them odd
-        # (ensures the original voxel is in the center of FullSurroundings)
-        if z_repeats % 2 == 0:
-            z_repeats += 1
-        if y_repeats % 2 == 0:
-            y_repeats += 1
-        if x_repeats % 2 == 0:
-            x_repeats += 1
-
-        # Tile the surroundings matrix [dim]repeats times in each direction
-        self.tile_repeats = [z_repeats, y_repeats, x_repeats]
-        full_surroundings = np.tile(lattice.MinDesign, self.tile_repeats)
-
-        return full_surroundings
+        return rot_surr

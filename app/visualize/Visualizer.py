@@ -1,6 +1,5 @@
-import pyqtgraph as pg
 import pyqtgraph.opengl as gl
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGridLayout
+from PyQt6.QtWidgets import QWidget, QVBoxLayout
 from PyQt6.QtGui import QColor
 import numpy as np
 import math
@@ -8,7 +7,7 @@ import math
 from .Voxel import Voxel
 from .Bond import Bond
 from .ColorDict import ColorDict
-from algorithm.lattice.Lattice2 import Lattice
+from algorithm.lattice.Lattice import Lattice
 
 class Visualizer(QWidget):
     def __init__(self):

@@ -47,25 +47,22 @@ class Painter:
     def str_paint_lattice(self):
         """
         Phase 1: Paint initial set of structural bonds in the lattice
-
-        Note (*) that we only run this on fresh instances of Mesovoxel.
-        So we assume voxels are in the mesovoxel iff. they are structural.
         """
-        for m_voxel in self.mesovoxel.mvoxels: # (*)
-            s_voxel_id = next(iter(m_voxel.maplist))
+        for s_voxel_id in self.mesovoxel.structural_voxels:
             s_voxel = self.lattice.get_voxel(s_voxel_id)
 
             for direction, bond in s_voxel.bond_dict.dict.items():
                 partner_voxel, partner_bond = s_voxel.get_partner(direction)
 
-                # Ensure neither bond is colored yet
+                # --- Paint path of structural bonds ---
+                # ensure neither bond is colored yet
                 if bond.color is not None or partner_bond.color is not None:
                     continue
-                # Only want to paint bonds between two structural voxels
-                if not self.mesovoxel.contains_voxel(partner_voxel.id): # (*)
+                # only want to paint bonds between two structural voxels
+                if partner_voxel.type != "structural":
                     continue
                 
-                # Paint a new bond
+                # Paint the new bond
                 self.n_colors += 1
                 self.paint_bond(bond, self.n_colors, 'structural')
                 self.paint_bond(partner_bond, -1*self.n_colors, 'structural')
@@ -255,7 +252,6 @@ class Painter:
     def map_paint(self, parent, child, sym_label: str, with_negation: bool) -> set[int]:
         """
         Map the bonds of a parent voxel onto the child voxel, with some rotation (sym_label).
-        If with_negation is True, then we flip the complementarity of all c_bonds
 
         Args:
             parent: Voxel/int, of the 'parent' voxel to map onto the child

@@ -1,5 +1,5 @@
 from algorithm.lattice.Voxel import Voxel
-from algorithm.lattice.Lattice2 import Lattice
+from algorithm.lattice.Lattice import Lattice
 
 from dataclasses import dataclass
 from typing import Optional

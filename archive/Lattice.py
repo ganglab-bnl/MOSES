@@ -14,7 +14,7 @@ import pandas as pd
 
 from algorithm.lattice.Voxel import Voxel
 from algorithm.lattice.Bond import Bond
-# from algorithm.symmetry.Relation import Relation
+from algorithm.symmetry.Relation import Relation
 
 class Lattice:
     """
@@ -35,7 +35,7 @@ class Lattice:
         _init_voxels: Initializes all Voxel + blank Bond objects and their coordinates
                         in the Lattice.MinDesign
         _fill_partners: Fills all bond partners on all voxels in voxel_list in place
-        get_partner: Internal method to get the bond partner of a voxel (for _fill_partners)
+        _get_partner: Internal method to get the bond partner of a voxel (for _fill_partners)
     """
     
     def __init__(self, input_lattice: np.array):
@@ -57,14 +57,13 @@ class Lattice:
             self.UnitCell = np.pad(input_lattice, ((0, 1), (0, 1), (0, 1)), 'wrap') # Repeat layers
             self.MinDesign = input_lattice
 
-        self.voxels = self._init_voxels(self.MinDesign)
+        self.voxels, self.coord_list = self._init_voxels(self.MinDesign)
         self._fill_partners()
 
         # Algorithm data structures
         # self.rotater = Rotater()
         self.surroundings = None
         self.symmetry_df = None
-
         self.colordict = None
         self.default_color_config = {}
         self.n_colors = 0
@@ -75,13 +74,13 @@ class Lattice:
         Compute all symmetries for the Lattice and fill the SymmetryDf.
         Fills in self.Surroundings, which is needed to fill self.symmetry_df in place.
         """
-        from algorithm.symmetry.Surroundings2 import Surroundings2
+        from archive.Surroundings import Surroundings
         from algorithm.symmetry.SymmetryDf import SymmetryDf
 
         # Initializing Surroundings + SymmetryDf (order matters)
         # computes all symmetries in place and fills a dataframe, 'SymmetryDf'
         # with all possible voxel pairs and their symmetries
-        self.surroundings = Surroundings2(self)
+        self.surroundings = Surroundings(self)
         self.symmetry_df = SymmetryDf(self)
 
     def get_voxel(self, id) -> Voxel:
@@ -94,18 +93,18 @@ class Lattice:
         """
         if isinstance(id, int):
             # Case 1: id is an index (int)
-            voxel = list(self.voxels.values())[id]
+            voxel_index = id
         elif isinstance(id, tuple):
             # Case 2: id is euclidean coordinates (tuple)
-            voxel = self.voxels[id]
+            voxel_index = self.coord_list.index(id)
         elif isinstance(id, np.ndarray):
             # Case 3: id is np.ndarray coordinates
-            voxel = self.voxels[tuple(id)]
+            voxel_index = self.coord_list.index(tuple(id))
         else:
             # Case 4: Invalid type
             raise ValueError(f"Invalid id type: {type(id)}")
 
-        # voxel = self.voxels[voxel_index] # Omiting error handling because it's self explanatory
+        voxel = self.voxels[voxel_index] # Omiting error handling because it's self explanatory
         return voxel
 
     def final_df(self, show_bond_type=False) -> pd.DataFrame:
@@ -116,7 +115,7 @@ class Lattice:
         final_df = []
 
         # Iterate through the voxels and bonds
-        for coord, voxel in self.voxels.items():
+        for voxel in self.voxels:
             row = {
                 ('Voxel', 'ID'): voxel.id,
                 ('Voxel', 'Material'): voxel.material,
@@ -136,30 +135,29 @@ class Lattice:
         return final_df
     
 
-    # def unique_origami(self) -> list[int]:
-    #     """
-    #     Returns a list of unique origami (Voxel+Bonds) in the lattice.
-    #     """
-    #     if self.symmetry_df is None:
-    #         raise ValueError("SymmetryDf not computed yet. Run Lattice.compute_symmetries() first.")
+    def unique_origami(self) -> list[int]:
+        """
+        Returns a list of unique origami (Voxel+Bonds) in the lattice.
+        """
+        if self.symmetry_df is None:
+            raise ValueError("SymmetryDf not computed yet. Run Lattice.compute_symmetries() first.")
         
-    #     voxels = iter(self.voxels.values())
-    #     unique_origami = [next(voxels).id]  # Initialize with the first voxel's ID in lattice
+        unique_origami = [self.voxels[0].id]  # Initialize with the first voxel's ID in lattice
 
-    #     for voxel1 in voxels:
-    #         if all(         # If for all voxel2's in unique_origami
-    #             not any(    # voxel1 and voxel2 don't satisfy "equal" relation
-    #                 Relation.get_voxel_relation(voxel1, self.get_voxel(voxel2_id), sym_label) == "equal"
-    #                 for sym_label in self.symmetry_df.symlist(voxel1.id, voxel2_id) or [] 
-    #             ) # ^^ for any given rotation under which they could be equal
-    #             for voxel2_id in unique_origami
-    #         ):
-    #             unique_origami.append(voxel1.id) # then voxel1 is unique
+        for voxel1 in self.voxels:
+            if all(         # If for all voxel2's in unique_origami
+                not any(    # voxel1 and voxel2 don't satisfy "equal" relation
+                    Relation.get_voxel_relation(voxel1, self.get_voxel(voxel2_id), sym_label) == "equal"
+                    for sym_label in self.symmetry_df.symlist(voxel1.id, voxel2_id) or [] 
+                ) # ^^ for any given rotation under which they could be equal
+                for voxel2_id in unique_origami
+            ):
+                unique_origami.append(voxel1.id) # then voxel1 is unique
 
-    #     return unique_origami
+        return unique_origami
 
 
-    # --- Internal methods --- #
+    # --- Internal methods ---
     def _is_unit_cell(lattice: np.ndarray) -> bool:
         """
         Returns whether a given lattice (np.array) is a unit cell.
@@ -189,19 +187,21 @@ class Lattice:
         return is_unit_cell
     
 
-    def _init_voxels(self, MinDesign: np.array) -> dict[tuple[float, float, float], Voxel]:
+    def _init_voxels(self, MinDesign: np.array) -> tuple[list[Voxel], list[tuple]]:
         """
-        Create Voxel objects for each voxel in MinDesign, creating a dictionary:
-            - {coords: Voxel}
-        where key-value pairs associate Voxels to their coordinates. This
-        dictionary is used directly by the Visualizer class.
-
-        Args:
-            MinDesign: 3D numpy array of ints, the minimum copy-pastable design
-        Returns:
-            voxels, a dictionary of Voxel objects indexable by coordinates
+        Create Voxel objects for each voxel in MinDesign, filling the following lists:
+            - voxel_list: List of Voxel objects
+            - coord_list: List of coordinates of each voxel
+        where Voxel.index for each voxel can quickly index and retrieve the 
+        Voxel object / coordinates from the corresponding list.
+        @param:
+            - MinDesign: 3D numpy array of ints, the minimum copy-pastable design
+        @return:
+            - voxel_list: List of Voxel objects
+            - coord_list: List of tuples of ints
         """
-        voxels = {}
+        voxel_list = []
+        coord_list = []
 
         id = 0
         # 1. Initialize all voxels with empty vertices
@@ -218,21 +218,31 @@ class Lattice:
             )
             
             # Append current voxel and its coordinates to the lists
-            voxels[coordinates] = current_voxel
+            voxel_list.append(current_voxel)
+            coord_list.append(coordinates)
             id += 1
 
-        return voxels
+        # Print all voxel indices and coordinates
+        # ids = ', '.join(str(voxel.id) for voxel in voxel_list)
+        # print(f'Initialized Voxels: {ids}')
+        # coords = ', '.join(str(coord) for coord in coord_list)
+        # print(f'With coordinates: {coords}')
+
+        # for voxel in voxel_list:
+        #     print(f"init voxel_{voxel.id} ({voxel.material}): coords {voxel.coordinates}")
+
+        return voxel_list, coord_list
     
     def _fill_partners(self):
         """Fill all bond partners on all voxels in voxel_list in place."""
-        for voxel in self.voxels.values():
+        for voxel in self.voxels:
             for direction in voxel.vertex_directions:
                 voxel_bond = voxel.get_bond(direction)
                 # Skip if bond already has a partner
                 if voxel_bond.bond_partner is not None:
                     continue
                 # Get the partner bond the voxel is connected to
-                partner_voxel, partner_bond = self.get_partner(voxel=voxel, 
+                partner_voxel, partner_bond = self._get_partner(voxel=voxel, 
                                                                 direction=direction)
                 # Set the partner_bond attributes on both voxels
                 voxel_bond.set_bond_partner(partner_bond)
@@ -240,7 +250,7 @@ class Lattice:
 
                 # print(f"Filled partner: Voxel {voxel.id} [{voxel.material}] ---{direction}---> Voxel {partner_voxel.id} [{partner_voxel.material}]")
     
-    def get_partner(self, voxel, direction) -> tuple[Voxel, Bond]:
+    def _get_partner(self, voxel, direction) -> tuple[Voxel, Bond]:
         """
         Get the bond partner of a voxel in a given direction.
         Note that directions are all stored as tuples but need to be converted

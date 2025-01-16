@@ -1,10 +1,10 @@
-from typing import Set
+from copy import deepcopy
 
 from algorithm.lattice.Voxel import Voxel
 from algorithm.lattice.Bond import Bond
 from algorithm.lattice.Lattice import Lattice
 from algorithm.symmetry.Rotation import Rotater
-from algorithm.painting.Mesovoxel import Mesovoxel, MVoxel
+from algorithm.painting.Mesovoxel import Mesovoxel
 
 
 class Painter:
@@ -26,28 +26,28 @@ class Painter:
         self.lattice = lattice
         self.mesovoxel = Mesovoxel(lattice, self)
 
-        # Painting sets
-        self.painted_voxels: Set[int] = set() # (int)
-        self.meso_candidates: Set[int] = set() # (int)
-
         # Count of total # colors (not including complementary) 
         # used to paint the MinDesign
         self.n_colors = 0 
 
         # Rotater instance (used for map painting)
-        self.rotater = Rotater()
-
+        self.rotater = Rotater(lattice)
         self.verbose: bool = verbose # If true, prints debugging statements
 
     def paint_lattice(self):
         """Final callable method to paint the lattice."""
         self.str_paint_lattice()
         self.comp_paint_lattice()
+        self.map_mesovoxel()
 
     def str_paint_lattice(self):
         """
-        Phase 1: Paint initial set of structural bonds in the lattice
+        Phase 1: Paint initial set of structural bonds in the lattice.
+        Just paint a path of structural bonds connecting all structural voxels
+        to each other.
         """
+        if self.verbose:
+            print("===== STARTING STR_PAINT_LATTICE =====")
         for s_voxel_id in self.mesovoxel.structural_voxels:
             s_voxel = self.lattice.get_voxel(s_voxel_id)
 
@@ -67,174 +67,328 @@ class Painter:
                 self.paint_bond(bond, self.n_colors, 'structural')
                 self.paint_bond(partner_bond, -1*self.n_colors, 'structural')
 
-                self.painted_voxels.update((s_voxel_id, partner_voxel.id))
-
                 if self.verbose:
-                    print(f"Paint new s_bond ({self.n_colors}):\nBetween voxel {s_voxel_id} ({bond.direction}) and voxel {partner_voxel.id} ({partner_bond.direction})\n")
+                    print(f"\n--- PAINT S_BOND ({self.n_colors}) --- \nvoxel_{s_voxel_id} ({bond.direction}) <---> voxel_{partner_voxel.id} ({partner_bond.direction})")
 
-        # Iterative self symmetry painting
-        while self.painted_voxels:
-            print(f"Iterative self sym painting with painted_voxels{self.painted_voxels}...")
-            voxel = self.painted_voxels.pop()
-            pv = self.self_sym_paint(voxel)
-            self.painted_voxels.update(pv)
-
-        # Go through and map the structural colors onto the rest of the lattice
-        # for mv in self.mesovoxel.mvoxels:
-        #     mv_voxel = mv.repr_voxel()
-        #     print(f"Mapping {mv_voxel.id} onto the rest of the lattice...\n---")
-            
-        #     # Go through every other voxel in its equivalence class and map structural bonds
-        #     for mv_child_id, symlist in self.lattice.symmetry_df.partner_symdict(mv_voxel.id).items():
-        #         if len(symlist) == 0 or symlist is None:
-        #             continue
-        #         print(f"\t--> child vox_{mv_child_id} has symmetries {symlist}")
-        #         for sym_label in symlist:
-        #             # sym_label = symlist[0] # Get any symmetry
-        #             print(f"Mapping sym {sym_label}")
-        #             pv = self.map_paint(mv_voxel, mv_child_id, sym_label, with_negation=False)
-        #             self.painted_voxels.update(pv)
-
-        # Iterative self symmetry painting (again)
-        # while self.painted_voxels:
-        #     voxel = self.painted_voxels.pop()
-        #     pv = self.self_sym_paint(voxel)
-        #     self.painted_voxels.update(pv)
-
-    def comp_paint_lattice2(self):
-        """
-        Phase 2: Paint all complementary bonds in the lattice
-        """
-        for voxel1 in self.lattice.voxels:
-            for direction, bond in voxel1.bond_dict.dict.items():
-                voxel2, bond2 = voxel1.get_partner(direction)
-
-                # Ensure neither bond is colored yet
-                if bond.color is not None or bond2.color is not None:
-                    continue
-
-                # Assess whether the voxel is in the mesovoxel or not
+                self.self_sym_paint(s_voxel)
+                self.self_sym_paint(partner_voxel)
 
 
     def comp_paint_lattice(self):
         """
-        Phase 2: Paint all complementary bonds in the lattice
+        Paint all complementary bonds, slowly adding complementary voxels into the mesovoxel
+        until all vertices on the structural voxel set are painted.
         """
-        for voxel1 in self.lattice.voxels:
-            for direction, bond in voxel1.bond_dict.dict.items():
-                voxel2, bond2 = voxel1.get_partner(direction)
 
-                # Ensure neither bond is colored yet
-                if bond.color is not None or bond2.color is not None:
+        if self.verbose:
+            print("\n===== STARTING COMP_PAINT_LATTICE =====\n")
+        count = 0
+        for voxel1_id in self.mesovoxel.structural_voxels:
+            voxel1 = self.lattice.get_voxel(voxel1_id)
+            for direction1, bond1 in voxel1.bond_dict.dict.items():
+
+                # skip bonds which are already painted
+                if bond1.color is not None:
                     continue
+                
+                # get the voxel which the structural voxel is connected to
+                bond2 = bond1.bond_partner
+                voxel2 = bond2.voxel
 
-                # Paint a new bond
-                self.n_colors += 1
-                self.paint_bond(bond, self.n_colors, 'complementary')
-                self.paint_bond(bond2, -1*self.n_colors, 'complementary')
-
-                self.painted_voxels.update((voxel1.id, voxel2.id))
-                self.meso_candidates.update((voxel1.id, voxel2.id))
-
+                # if count==1:
+                #     return
                 if self.verbose:
-                    print(f"Paint new c_bond ({self.n_colors}):\nBetween voxel {voxel1.id} ({bond.direction}) and voxel {voxel2.id} ({bond2.direction})\n")
+                    print(f"\nLOOP {count}: Between voxel1 ({voxel1_id})'s bond {bond1.get_label()} and voxel2 ({voxel2.id})'s bond {bond2.get_label()}\n---")
+                count += 1
 
-                while True:
-                    # Iterative self symmetry painting ("adding info")
-                    while self.painted_voxels:
-                        voxel = self.painted_voxels.pop()
-                        pv = self.self_sym_paint(voxel)
-                        self.painted_voxels.update(pv)
-                        
-                        # Also: Updating list of potential new 'candidate' voxels to add to mesovoxel
-                        self.meso_candidates.update(pv) 
+                # check what mesoparent it has
+                mesoparents = self.mesovoxel.find_mesoparent(voxel2)
+                # unpack
+                comp_mp = mesoparents.get("complementary")
+                str_mp = mesoparents.get("structural")
+            
+                # if there is a c_voxel in the mesovoxel which looks like voxel2
+                if comp_mp:
+                    if self.verbose:
+                        print(f"MESOPARENT: Found comp_mp {comp_mp}!")
+                    symlist = self.lattice.symmetry_df.symlist(voxel2, comp_mp) # take any valid sym
+                    for sym in symlist:
+                        res = self.map_paint(parent=comp_mp, child=voxel2, sym_label=sym) # use it to map
+                        if res==0:
+                            res = self.map_paint(parent=comp_mp, child=voxel2, sym_label=sym, with_negation=True) # try it negated
+                        if res==1: # break out of loop if we successfully painted
+                            break
+                    
+                    if bond1.color is None and bond2.color is None:
+                        self.n_colors += 1
 
-                    # Adding new voxels to mesovoxel ("using info to reduce unique origami")
-                    while self.meso_candidates:
-                        # VOXEL UPDATING LOGIC
-                        voxel_id = self.meso_candidates.pop()
-                        voxel = self.lattice.get_voxel(voxel_id)
-
-                        mp, with_negation = self.mesovoxel.find_mesoparent(voxel)
-                        if mp is None:
-                            continue # Skip if no mesoparent found (should never happen)
-                        
-                        # If we could not find any valid MVoxels aside from this one with negation
-                        # and the negation parent has a mesopartner - we know the partner must be the
-                        # mesopartner (bottom double-oreo problem)
-                        if mp.mesopartner is not None and with_negation:
-
-                            if self.verbose:
-                                print("Taking the mesoPARTNER as the mesoparent instead...")
-
-                            mp = mp.mesopartner
-                            with_negation = False
-                        
-                        mp_voxel = mp.repr_voxel()
-
-                        if self.verbose:
-                            print(f"\n--- Found mesoparent {mp_voxel.id} for voxel {voxel_id}, with_negation={with_negation} ---\n")
-
-                        symlist = self.lattice.symmetry_df.symlist(voxel.id, mp_voxel.id)
-                        sym_label = symlist[0]
-                        pv = self.map_paint(parent=mp_voxel, child=voxel, sym_label=sym_label, with_negation=with_negation)
-                        self.painted_voxels.update(pv)
-                        self.meso_candidates.update(pv)
-                        
-                        # Update the rest of equivalent voxels in Mesoparent's maplist with new info
-                        # Also returns set of painted voxels to update
-                        if self.verbose:
-                            print(f"Updating voxel information for voxel {mp_voxel.id}'s maplist")
-                        pv = mp.update_voxels(voxel, with_negation)
-
-                        # Also update the mesopartner's voxels
-                        if mp.mesopartner is not None:
-
-                            mp_partner_voxel = mp.repr_voxel()
-
-                            if self.verbose:
-                                print(f"Also updating voxel information for MESOPARTNER voxel {mp_partner_voxel.id}'s maplist")
-
-                            with_negation2 = not with_negation
-                            pv2 = mp.mesopartner.update_voxels(voxel, with_negation2)
-                            pv.update(pv2)
-
-                        self.painted_voxels.update(pv)
-                        self.meso_candidates.update(pv)
-
-                        # VOXEL ADDING LOGIC
-                        # Don't add the voxel if it's already in the mesovoxel
-                        if self.mesovoxel.contains_voxel(voxel):
-                            continue
-
-                        if not with_negation:
-
-                            if self.verbose:
-                                print(f"Adding voxel {voxel.id} to MP voxel {mp_voxel.id}'s maplist {mp.maplist}")
-
-                            mp.maplist.add(voxel.id)
-                            self.mesovoxel.voxels[voxel.id] = mp.id
-
-                        # Add a new complementary voxel to the mesovoxel
+                        symlist = self.lattice.symmetry_df.symlist(voxel1, voxel2)
+                        if symlist==[] or symlist is None:
+                            bond_type = "structural"
                         else:
-                            mvoxel = MVoxel(
-                                id=self.mesovoxel.n_mvoxels(), 
-                                voxel=voxel, 
-                                type="complementary", 
-                                mesovoxel=self.mesovoxel, 
-                                mesopartner=mp
-                            )
-                            self.mesovoxel.mvoxels.append(mvoxel)
-                            self.mesovoxel.voxels[voxel_id] = mvoxel.id
-                            mp.set_mesopartner(mvoxel)
+                            bond_type = "complementary"
 
-                            if self.verbose:
-                                print(f"--- Adding NEW c_voxel to mesovoxel: {mvoxel} ---\n")
-                            
-                    if len(self.painted_voxels) == 0:
+                        # paint the bond
+                        if self.verbose:
+                            print(f"\n--- PAINT {bond_type} BOND ({self.n_colors}) --- \nvoxel_{voxel1.id} ({bond1.direction}) <---> voxel_{voxel2.id} ({bond2.direction})\n")
+                    
+                        self.paint_bond(bond=bond1, color=self.n_colors, type=bond_type)
+                        self.paint_bond(bond=bond2, color=-self.n_colors, type=bond_type)
+
+                    # paint self symmetries
+                    self.self_sym_paint(voxel1)
+                    self.self_sym_paint(voxel2)
+
+                    # map the child back onto the parent
+                    if self.verbose:
+                        print(f"mapping child voxel_{voxel2.id} back onto parent voxel_{comp_mp}")
+                    for sym in symlist:
+                        res = self.map_paint(parent=voxel2, child=comp_mp, sym_label=sym) # use it to map
+                        if res==0:
+                            res = self.map_paint(parent=voxel2, child=comp_mp, sym_label=sym, with_negation=True) # try it negated
+                        if res==1: # break out of loop if we successfully painted
+                            break
+
+                elif str_mp == voxel1_id: # only s_voxel found and it's voxel1
+                    if self.verbose:
+                        print(f"MESOPARENT: Only found str_mp {str_mp} and it IS voxel1. Flipping complementarity when mapping.")
+                    # flip the complementarity when mapping and add it to complementary set
+                    symlist = self.lattice.symmetry_df.symlist(voxel2, str_mp)
+                    for sym in symlist:
+                        res = self.map_paint(parent=str_mp, child=voxel2, sym_label=sym, with_negation=True) # use it to map
+                        if res==0:
+                            res = self.map_paint(parent=str_mp, child=voxel2, sym_label=sym, with_negation=True) # try it negated
+                        if res==1: # break out of loop if we successfully painted
+                            break
+
+                    if bond1.color is None and bond2.color is None:
+                        # paint the bond
+                        self.n_colors += 1
+
+                        symlist = self.lattice.symmetry_df.symlist(voxel1, voxel2)
+                        if symlist==[] or symlist is None:
+                            bond_type = "structural"
+                        else:
+                            bond_type = "complementary"
+
+                        # paint the bond
+                        if self.verbose:
+                            print(f"\n--- PAINT {bond_type} BOND ({self.n_colors}) --- \nvoxel_{voxel1.id} ({bond1.direction}) <---> voxel_{voxel2.id} ({bond2.direction})\n")
+                    
+                        self.paint_bond(bond=bond1, color=self.n_colors, type=bond_type)
+                        self.paint_bond(bond=bond2, color=-self.n_colors, type=bond_type)
+
+                    # add the voxel to the complementary set
+                    voxel2.set_type("complementary")
+                    self.mesovoxel.complementary_voxels.add(voxel2.id)
+                    
+                    # paint self symmetries
+                    self.self_sym_paint(voxel1)
+                    self.self_sym_paint(voxel2)
+
+                    # map the child back onto the parent
+                    # self.map_paint(parent=voxel2, child=str_mp, sym_label=sym, with_negation=True)
+                    if self.verbose:
+                        print(f"mapping child voxel_{voxel2.id} back onto parent voxel_{str_mp}")
+                    for sym in symlist:
+                        res = self.map_paint(parent=voxel2, child=str_mp, sym_label=sym, with_negation=True) # use it to map
+                        if res==0:
+                            res = self.map_paint(parent=voxel2, child=str_mp, sym_label=sym, with_negation=False) # try it negated
+                        if res==1: # break out of loop if we successfully painted
+                            break
+
+
+                else: # only a s_voxel and it's not voxel1
+                    if self.verbose:
+                        print(f"MESOPARENT: Only found str_mp {str_mp} and it's not voxel1. (No flip comp)")
+                    symlist = self.lattice.symmetry_df.symlist(voxel2, str_mp)
+                    
+                    for sym in symlist:
+                        res = self.map_paint(parent=str_mp, child=voxel2, sym_label=sym) # use it to map
+                        if res==0:
+                            res = self.map_paint(parent=str_mp, child=voxel2, sym_label=sym, with_negation=True) # try it negated
+                        if res==1: # break out of loop if we successfully painted
+                            break
+                    
+                    if bond1.color is None and bond2.color is None:
+                        # paint the bond
+                        self.n_colors += 1
+
+                        symlist = self.lattice.symmetry_df.symlist(voxel1, voxel2)
+                        if symlist==[] or symlist is None:
+                            bond_type = "structural"
+                        else:
+                            bond_type = "complementary"
+
+                        # paint the bond
+                        if self.verbose:
+                            print(f"\n--- PAINT {bond_type} BOND ({self.n_colors}) --- \nvoxel_{voxel1.id} ({bond1.direction}) <---> voxel_{voxel2.id} ({bond2.direction})\n")
+                    
+                        self.paint_bond(bond=bond1, color=self.n_colors, type=bond_type)
+                        self.paint_bond(bond=bond2, color=-self.n_colors, type=bond_type)
+                    
+                    # paint self symmetries
+                    self.self_sym_paint(voxel1)
+                    self.self_sym_paint(voxel2)
+
+                    # map the child back onto the parent
+                    # self.map_paint(parent=voxel2, child=str_mp, sym_label=sym)
+                    if self.verbose:
+                        print(f"mapping child voxel_{voxel2.id} back onto parent voxel_{str_mp}")
+                    for sym in symlist:
+                        res = self.map_paint(parent=voxel2, child=str_mp, sym_label=sym) # use it to map
+                        if res==0:
+                            res = self.map_paint(parent=voxel2, child=str_mp, sym_label=sym, with_negation=True) # try it negated
+                        if res==1: # break out of loop if we successfully painted
+                            break
+
+                    
+    def map_mesovoxel(self) -> None:
+        """
+        Map the voxels in the mesovoxel back onto all voxels in the lattice.
+        To make the visuals look nicer.
+        """
+        if self.verbose:
+            print("Mapping the mesovoxel onto the rest of the lattice...\n---")
+        for voxel1 in self.lattice.voxels.values():
+            
+            # skip voxels that are in the mesovoxel
+            if self.mesovoxel.contains_voxel(voxel1):
+                if self.verbose:
+                    print(f"skipping {voxel1.id}, already in mesovoxel")
+                continue
+
+            # check what mesoparent it has
+            mesoparents1 = self.mesovoxel.find_mesoparent(voxel1)
+            # unpack
+            comp_mp = mesoparents1.get("complementary")
+            str_mp = mesoparents1.get("structural")
+
+            # if only str_mp exists, then only one choice to map onto voxel1
+            if not comp_mp:
+                if self.verbose:
+                    print(f"only str_mp {str_mp} exists, mapping onto voxel {voxel1.id}")
+                symlist = self.lattice.symmetry_df.symlist(str_mp, voxel1)
+                for sym in symlist:
+                    res = self.map_paint(parent=str_mp, child=voxel1, sym_label=sym, with_negation=False, force=False)
+                    if res:
                         break
+                voxel1.set_type("structural")
+                continue # skip rest of loop
 
-    # Painting operations
+            # if comp_mp exists, go through all neighbors until we know
+            # which variant to map
+            map_variant = str_mp
+            mesotype1 = "structural"
+            for bond in voxel1.bond_dict.dict.values():
+                voxel2 = bond.get_partner_voxel()
+                if self.verbose:
+                    print(f"checking partner {voxel2.id}")
+
+                # skip the partner voxel if it has no symmetry with voxel1
+                symlist = self.lattice.symmetry_df.symlist(voxel1, voxel2)
+                if symlist == [] or symlist is None:
+                    continue
+                
+                # find which variant to map it based on the type of the partner voxel
+                mesotype2 = voxel2.get_type()
+                if self.verbose:
+                    print(f"{voxel2.id} has sym and mesotype {mesotype2}")
+                if mesotype2 == "structural":
+                    map_variant = comp_mp
+                    mesotype1 = "complementary"
+                    if self.verbose:
+                        print(f"found partner voxel{voxel2.id} with type {mesotype2} - setting map_variant to {comp_mp}")
+                    break
+                elif mesotype2 == "complementary":
+                    map_variant = str_mp
+                    mesotype1 = "structural"
+                    if self.verbose:
+                        print(f"found partner voxel{voxel2.id} with type {mesotype2} - setting map_variant to {str_mp}")
+                    break
+                else:
+                    continue
+            
+            if self.verbose:
+                print(f"both str_mp {str_mp} and comp_mp {comp_mp} exist, mapping {map_variant} onto voxel {voxel1.id}")
+            sym = self.lattice.symmetry_df.symlist(map_variant, voxel1)[0]
+            res = self.map_paint(parent=map_variant, child=voxel1, sym_label=sym, force=False)
+            voxel1.set_type(mesotype1)
+                
+
+    def self_sym_paint(self, voxel) -> None:
+        """Paint a given voxel with all its self symmetries"""
+        # handle Voxel and int (voxel.id) instances
+        voxel = voxel if isinstance(voxel, Voxel) else self.lattice.get_voxel(voxel)
+
+        if self.verbose:
+            print(f"self-sym paint(voxel_{voxel.id})")
+
+        symlist = self.lattice.symmetry_df.symlist(voxel.id, voxel.id)
+        for sym_label in symlist:
+            _ = self.map_paint(parent=voxel, child=voxel, sym_label=sym_label)
+
+    def map_paint(self, parent, child, sym_label: str, with_negation: bool=False, force=False) -> int:
+        """
+        Map the bonds of a parent voxel onto the child voxel, with some symmetry operation.
+        Throws an error 0 if the map painting operation results in a bad paint, else 1.
+        
+        Args:
+            parent: Voxel or id corresponding to voxel with bond info to map
+            child: Voxel or id for voxel as target of mapping
+            sym_label (str): Label of rotation to apply to parent voxel before mapping onto child
+
+        Returns:
+            int, 0 for fail and 1 for success
+        """
+        parent = parent if isinstance(parent, Voxel) else self.lattice.get_voxel(parent)
+        child = child if isinstance(child, Voxel) else self.lattice.get_voxel(child)
+        
+        if self.verbose:
+            print(f"    map_paint(parent_{parent.id} --> child_{child.id}, sym={sym_label}, with_negation={with_negation})")
+            print(f"        parent = {[f'{b.get_label()} ({b.color}),' for b in parent.bond_dict.dict.values()]}")
+            print(f"        child = {[f'{b.get_label()} ({b.color}),' for b in child.bond_dict.dict.values()]}")
+
+        rotated_parent = self.rotater.rotate_voxel(voxel=parent, rot_label=sym_label) # rotated bond_dict object
+
+        # store copies of original bonddicts incase it fails
+        og_child_bd = deepcopy(child.bond_dict.dict)
+        og_parent_bd = deepcopy(parent.bond_dict.dict) 
+
+        # Go through and map each parent bond to the child on its corresponding (rotated) vertex
+        for direction, parent_bond in rotated_parent.dict.items():
+            child_bond = child.bond_dict.get_bond(direction)
+
+            # no need to paint None colors)
+            if parent_bond.color is None:
+                if self.verbose:
+                    print(f"oops! parent bond {parent_bond.get_label()} is none")
+                continue
+            # only paint onto already-painted bonds if force is true
+            if child_bond.color is not None and not force:
+                if self.verbose:
+                    print(f"oops! child bond {child_bond.get_label()} is not none, and we're not forcing")
+                continue
+            
+            # Bond color is negated (on c_bonds) if with_negation
+            neg = -1 if with_negation and parent_bond.type == "complementary" else 1
+            bond_color = int(neg * parent_bond.color)
+
+            # PALINDROMIC CHECK before we paint
+            if child.is_palindromic(bond_color) or child_bond.bond_partner.voxel.is_palindromic(-1*bond_color):
+                # undo any painting changes
+                child.bond_dict.dict = og_child_bd
+                parent.bond_dict.dict = og_parent_bd
+                if self.verbose:
+                    print("Mapping failed.")
+                return 0 # fail
+                
+            self.paint_bond(child_bond, bond_color, type=parent_bond.type)
+            bond_partner = child_bond.bond_partner
+            self.paint_bond(bond_partner, -1*bond_color, type=parent_bond.type)
+
+        return 1 # success
+
     def paint_bond(self, bond: Bond, color: int, type: str) -> None:
         """
         Paint certain color / type onto a bond.
@@ -248,72 +402,3 @@ class Painter:
             print(f"\t ---> painting {color} onto voxel {bond.voxel.id}'s bond {bond.get_label()} with type {type} ")
         bond.set_color(color)
         bond.set_type(type)
-
-    def map_paint(self, parent, child, sym_label: str, with_negation: bool) -> set[int]:
-        """
-        Map the bonds of a parent voxel onto the child voxel, with some rotation (sym_label).
-
-        Args:
-            parent: Voxel/int, of the 'parent' voxel to map onto the child
-            child: Voxel/int, of the 'child' voxel to have new bonds colored onto
-            sym_label: Name of transformation to apply to parent before mapping onto child
-            with_negation: Whether to flip complementarity of c_bonds or not
-
-        Returns:
-            painted_voxels: A set of voxel ids which were also painted in the process
-        """
-        parent = parent if isinstance(parent, Voxel) else self.lattice.get_voxel(parent)
-        child = child if isinstance(child, Voxel) else self.lattice.get_voxel(child)
-
-        print(f"Trying to map parent_{parent.id} onto child_{child.id} with {sym_label} and negation={with_negation}")
-        found_bad = False
-        # Rotate the bonds of the parent voxel according to the satisfied symmetry operation
-        rotated_bond_dict = self.rotater.rotate_voxel(voxel=parent, rot_label=sym_label)
-
-        # And copy them over to the child
-        painted_voxels = set()
-        comp = -1 if with_negation else 1
-
-        for direction, parent_bond in rotated_bond_dict.dict.items():
-            child_bond = child.bond_dict.get_bond(direction)
-
-            # Don't paint onto already-painted bonds (+ no need to paint None colors)
-            if child_bond.color is not None or parent_bond.color is None:
-                print(f"NOOOOO parent vox_{parent.id}'s bond ({parent_bond.get_label()}) tried to paint onto child vox_{child.id}'s bond ({child_bond.get_label()})")
-                found_bad = True
-                continue
-            
-            # Bond color is negated (on c_bonds) if with_negation
-            bond_color = int(parent_bond.color * comp) if parent_bond.type == "complementary" else parent_bond.color
-            self.paint_bond(child_bond, bond_color, type=parent_bond.type)
-
-            # Also paint the partner voxel
-            partner_voxel, bond_partner = child.get_partner(direction)
-            bond_partner_color = -1*bond_color
-            self.paint_bond(bond_partner, bond_partner_color, type=parent_bond.type)
-
-            painted_voxels.add(partner_voxel.id)
-
-        print("Map paint encountered unpaintable bond.") if found_bad else print("Done!")
-        
-        return painted_voxels
-
-    def self_sym_paint(self, voxel) -> set[int]:
-        """
-        Map paint all of a voxel's self symmetries onto itself. 
-
-        Returns painted_voxels, a set of all other voxels in the lattice 
-        which are also painted as a result of the self symmetry painting.
-        """
-        voxel = voxel if isinstance(voxel, Voxel) else self.lattice.get_voxel(voxel)
-        symlist = self.lattice.symmetry_df.symlist(voxel.id, voxel.id)
-
-        painted_voxels = set()
-        for sym_label in symlist:
-            print(f"    self-sym paint: {sym_label}")
-            pv = self.map_paint(parent=voxel, child=voxel, sym_label=sym_label, with_negation=False)
-            painted_voxels.update(pv)
-
-        return painted_voxels
-    
-        

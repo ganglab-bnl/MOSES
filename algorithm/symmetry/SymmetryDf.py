@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import logging
 
-from algorithm.lattice.Lattice2 import Lattice
+from algorithm.lattice.Lattice import Lattice
 from algorithm.lattice.Voxel import Voxel
 from algorithm.symmetry.Rotation import NpRotationDict, ScipyRotationDict
 
