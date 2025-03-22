@@ -19,7 +19,6 @@ The following data structures in `/algorithm/lattice/` help us create the Lattic
 
 <img width="244" alt="Picture1" src="https://github.com/user-attachments/assets/7ccfb863-5590-4cff-8ed3-72da8e840191">
 
-
 ### The Voxel
 `Voxel` - The basic building block of the system - currently represents an octahedral DNA origami with 6 vertices (+- x, y, z) which can contain a material cargo centered inside.
 
@@ -42,22 +41,6 @@ We compute all possible symmetry operations between all combinations of Voxels i
 
 Most notably, this helper function of SymmetryDf will be useful in the painting stage.
 - `SymmetryDf.symlist(voxel_1, voxel_2)` - Return a list of all valid symmetries between two voxels
-
-### Relations
-
-We also introduce the idea of **relations**, which can be defined between two Bonds or two Voxels. These relations are also used to help compare voxels to each other in the painting stage. The idea of two Bonds / Voxels being _negations_ of each other is useful due to the complementary nature of DNA base-pair binding.
-
-**Bond level relations** - Between bond1 and bond2:
-- **equal** - Bond color1 == color2
-- **loose** - Either same or None-color comparison
-- **negation** - Bond color1 == -color2, and both are complementary bonds
-- **not equal** - Bond color1 =/= color2, or color1 = -color2 and both are structural bonds
-
-**Voxel relations** - Between voxel1 and voxel2:
-- **equal** - All bonds in the same direction are equal or loose
-- **negation** - All _complementary_ bonds in the same direction are negation or loose
-- **loose** - All bonds are loose (provides no information)
-- **not equal** - Exists at least one "not equal" bond relation between the two voxels
 
 ## Painting algorithm
 ### Background / Data Structures
