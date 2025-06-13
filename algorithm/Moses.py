@@ -24,6 +24,12 @@ class Moses:
         self.uncolored_bonds = self.get_uncolored_bonds()
         self.seen_bonds = set(self.uncolored_bonds)
 
+    def run(self):
+        """computes both phases of MOSES algorithm, then maps the rest of the lattice"""
+        self.str_paint()
+        self.comp_paint()
+        self.map_lattice()
+
     def str_paint(self):
         """paint an initial path of bonds connecting all structural voxels"""
         for voxel1 in self.mesovoxel.structural_voxels:
@@ -112,16 +118,7 @@ class Moses:
                     self.painter.map_paint(sv, v)
                     v.set_id2(sv.id2)
 
-    # def map_lattice2(self):
-    #     """once we have a finalized mesovoxel, map the unique voxels onto the rest of the lattice"""
-    #     for v in self.lattice.voxels:
-    #         if self.mesovoxel.in_mesovoxel(v):
-    #             continue
-    #         # iterate through its partners to see which mesoparent to map
-    #         sv, cv = self.mesovoxel.get_mesoparents(v)
-            
-
-                
+    # --- utils ---
     def paint_new_bond(self, bond1: Bond, bond2: Bond, type:str="structural") -> int:
         """paints the new color connecting bond1 and bond2 only if they're not none
         and also paints with self symmetries to exploit this new color
