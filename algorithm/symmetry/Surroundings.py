@@ -5,7 +5,12 @@ class Surroundings:
     def __init__(self, lattice: Lattice):
         self.lattice = lattice
 
+
     def voxel_surroundings(self, voxel) -> dict[tuple[float, float, float], int]:
+        """
+        create a cube of surrounding particles all oriented wrt. where 
+        v.cargo_coords would be
+        """
         v = self.lattice.get_voxel(voxel)
 
         xdim, ydim, zdim = self.lattice.dimensions
