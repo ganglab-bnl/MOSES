@@ -30,6 +30,11 @@ class Visualizer(QWidget):
         """plot our given lattice structure"""
         self.cleanup()
         voxels = lattice.voxels if not view_unit_cell else lattice.voxels + lattice.unit_cell_voxels
+        self.plot_voxels(voxels)
+
+    def plot_voxels(self, voxels: list['Voxel']):
+        """plot only the given list of voxels"""
+        self.cleanup()
         for v in voxels:
             # plot the octa
             octa_item = Octa(v, self.color_dict)
@@ -54,7 +59,7 @@ class Visualizer(QWidget):
         gc.collect()
 
 class RunVisualizer:
-    def __init__(self, lattice: Lattice, view_unit_cell=True, app=None):
+    def __init__(self, voxels: list['Voxel']=None, lattice: Lattice=None, view_unit_cell=True, app=None):
         import sys
         from PyQt6.QtWidgets import QApplication, QMainWindow
 
@@ -76,7 +81,11 @@ class RunVisualizer:
         self.central_layout.addWidget(self.vis)
         self.init_toolbar()
 
-        self.vis.plot_lattice(lattice, view_unit_cell)
+        if voxels is not None:
+            self.vis.plot_voxels(voxels)
+        elif lattice is not None:
+            self.vis.plot_lattice(lattice, view_unit_cell)
+
         self.main_window.show()
         self.app.exec()
 

@@ -28,7 +28,7 @@ class Bond:
 
 class Voxel:
     def __init__(self, coords: tuple[float, float, float], cargo: int, 
-                 cargo_coords: tuple[float, float, float], id: int=None):
+                 cargo_coords: tuple[float, float, float]=(0,0,0), id: int=None):
         """the essential unit of our lattice ---
         a point group with 6 bonds + an oriented cargo"""
 

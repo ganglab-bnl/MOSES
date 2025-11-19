@@ -35,7 +35,7 @@ class Lattice:
             for v in self.voxels:
                 # if in the last layer of any dimension
                 if v.coords[0]==self.xdim or v.coords[1]==self.ydim or v.coords[2]==self.zdim:
-                    print(f"v{v.id} in last layer {v.coords}")
+                    # print(f"v{v.id} in last layer {v.coords}")
                     self.unit_cell_voxels.append(v)
             
             for v in self.unit_cell_voxels:
